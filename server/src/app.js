@@ -21,4 +21,5 @@ app.get('/', (req, res) => {
   res.send('ShopSmart Backend Service');
 });
 
+
 module.exports = app;
