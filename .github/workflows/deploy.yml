@@ -19,7 +19,7 @@ jobs:
           key: ${{ secrets.VM_SSH_KEY }}
           script_stop: true
           script: |
-            cd /home/ubuntu
+            cd /home/ubuntu/shopsmart
             git pull origin main
             chmod +x deploy.sh
             ./deploy.sh
