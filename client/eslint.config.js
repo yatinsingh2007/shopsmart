@@ -4,8 +4,10 @@ import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 
 export default [
+
   {
-    files: ["**/*.js", "**/*.jsx"],
+    files: ["/*.js", "/.jsx"],
+    ignores: ["vite.config.js"],
 
     languageOptions: {
       ecmaVersion: "latest",
@@ -29,16 +31,26 @@ export default [
       ...js.configs.recommended.rules,
       ...react.configs.recommended.rules,
 
-
       "react/react-in-jsx-scope": "off",
+      "react/prop-types": "off",
 
       "no-console": "warn",
-      "eqeqeq": "error",
+      eqeqeq: "error",
     },
   },
 
+
   {
-    files: ["**/*.test.js", "**/*.test.jsx"],
+    files: ["vite.config.js", ".config.js", "scripts//*.js"],
+
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+
+
+  {
+    files: ["/.test.js", "**/.test.jsx"],
 
     languageOptions: {
       globals: {
