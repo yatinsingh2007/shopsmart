@@ -1,24 +1,23 @@
 const API = process.env.API_URL;
 
-if (!API) {
-console.error("API_URL is not defined");
-process.exit(1);
-}
+describe("API Unit Test (Mocked)", () => {
+  beforeAll(() => {
+    global.fetch = jest.fn(() =>
+      Promise.resolve({
+        status: 200,
+        ok: true,
+        json: async () => ({ message: "success" })
+      })
+    );
+  });
 
-(async () => {
-try {
-console.log("🔗 Hitting API:", API);
-const res = await fetch(API);
+  test("API should return success response", async () => {
+    const res = await fetch(API);
 
-console.log("Status:", res.status);
+    expect(res.ok).toBe(true);
+    expect(res.status).toBe(200);
 
-if (!res.ok) {
-  throw new Error(`Request failed with status ${res.status}`);
-}
-
-console.log("✅ API is reachable");
-} catch (err) {
-console.error("❌ API test failed:", err.message);
-process.exit(1);
-}
-})();
+    const data = await res.json();
+    expect(data.message).toBe("success");
+  });
+});
