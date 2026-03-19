@@ -1,5 +1,6 @@
 import React from 'react';
 import PropTypes from 'prop-types';
+import { Link } from 'react-router-dom';
 
 // --- Icons (Lucide-inspired raw SVGs to keep single-file without external deps) ---
 const IconMenu = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>;
@@ -17,12 +18,12 @@ const IconHeadphones = () => <svg width="24" height="24" viewBox="0 0 24 24" fil
 // --- Components ---
 
 const Navbar = () => (
-  <header className="w-full bg-white relative z-50">
+  <header className="w-full bg-white relative z-50" data-testid="navbar">
     {/* Top Row */}
-    <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+    <div className="max-w-[1400px] mx-auto px-2 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-1">
       
       {/* Left section: Hamburger & Search */}
-      <div className="flex items-center gap-4 flex-1">
+      <div className="flex items-center gap-2 sm:gap-4 flex-none sm:flex-1">
         <button className="p-2 hover:bg-neutral-100 rounded-full transition-colors">
           <IconMenu />
         </button>
@@ -37,14 +38,14 @@ const Navbar = () => (
       </div>
 
       {/* Center: Logo */}
-      <div className="flex-1 flex justify-center cursor-pointer">
-        <h1 className="text-2xl font-black tracking-tighter text-neutral-950 uppercase">
+      <Link to="/shopsmart/" data-testid="logo" className="flex-none sm:flex-1 flex justify-center cursor-pointer min-w-fit">
+        <h1 className="text-sm sm:text-2xl font-black tracking-tighter text-neutral-950 uppercase">
           SHOPSMART
         </h1>
-      </div>
+      </Link>
 
       {/* Right section: Links & Icons */}
-      <div className="flex items-center justify-end gap-6 flex-1">
+      <div className="flex items-center justify-end gap-1 sm:gap-6 flex-none sm:flex-1">
         <div className="hidden xl:flex items-center gap-6 text-sm font-medium text-neutral-500">
           <a href="#" className="hover:text-neutral-900 transition-colors">About Us</a>
           <a href="#" className="hover:text-neutral-900 transition-colors">Blog</a>
@@ -52,7 +53,13 @@ const Navbar = () => (
         </div>
         <div className="hidden xl:block w-px h-5 bg-neutral-200"></div>
         <div className="flex items-center gap-4">
-          <button className="p-2 hover:bg-neutral-100 rounded-full transition-colors text-neutral-700">
+          <Link to="/shopsmart/login/" data-testid="login-link" className="text-[8px] sm:text-sm font-bold text-neutral-900 hover:text-neutral-600 transition-colors whitespace-nowrap">
+            Login
+          </Link>
+          <Link to="/shopsmart/signup/" data-testid="signup-link" className="bg-neutral-900 text-white text-[8px] sm:text-sm font-bold px-1.5 py-1 sm:px-5 sm:py-2.5 rounded-full hover:bg-neutral-800 transition-all transform hover:scale-105 whitespace-nowrap">
+            Sign Up
+          </Link>
+          <button className="p-2 hover:bg-neutral-100 rounded-full transition-colors text-neutral-700 sm:hidden">
             <IconUser />
           </button>
           <button className="p-2 hover:bg-neutral-100 rounded-full transition-colors relative text-neutral-700">
@@ -83,13 +90,13 @@ const Navbar = () => (
 );
 
 const Hero = () => (
-  <section className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
+  <section className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12" data-testid="hero">
     <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
       
       {/* Left Content */}
       <div className="w-full lg:w-5/12 flex flex-col items-start gap-8 z-10 xl:pr-10">
         <div className="flex flex-col gap-4">
-          <h2 className="text-5xl sm:text-6xl xl:text-7xl font-bold leading-[1.05] tracking-tight text-neutral-900">
+          <h2 className="text-3xl sm:text-6xl xl:text-7xl font-bold leading-[1.05] tracking-tight text-neutral-900">
             Unleash Your Style<br />
             Shop the Latest<br />
             Trends
@@ -182,7 +189,7 @@ const FeaturedProducts = () => {
   ];
 
   return (
-    <section className="py-20 max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
+    <section className="py-20 max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8" data-testid="products">
       <div className="flex items-end justify-between mb-10">
         <div>
           <h2 className="text-3xl sm:text-4xl font-bold text-neutral-900 tracking-tight">Trending Now</h2>
@@ -390,9 +397,9 @@ const Footer = () => (
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-white font-sans text-neutral-900 antialiased font-[Inter,system-ui,sans-serif]">
+    <div className="min-h-screen bg-white font-sans text-neutral-900 antialiased font-[Inter,system-ui,sans-serif] overflow-x-hidden">
       <Navbar />
-      <main>
+      <main data-testid="main-content">
         <Hero />
         <FeaturedProducts />
         <Categories />
