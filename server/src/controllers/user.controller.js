@@ -1,45 +1,42 @@
-const userService = require('../services/user.service');
+const prisma = require('../lib/prisma');
 
-const getAllUsers = async (req, res) => {
+const getMe = async (req, res, next) => {
   try {
-    const users = await userService.getAllUsers();
-    res.json(users);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
-
-const getUserById = async (req, res) => {
-  try {
-    const user = await userService.getUserById(req.params.id);
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { id: true, email: true, name: true, role: true, createdAt: true }
+    });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
     res.json(user);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
-const createUser = async (req, res) => {
+const updateMe = async (req, res, next) => {
   try {
-    const user = await userService.createUser(req.body);
-    res.status(201).json(user);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
+    const { name, password } = req.body;
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (password) {
+      const bcrypt = require('bcryptjs');
+      updateData.password = await bcrypt.hash(password, 10);
+    }
 
-const deleteUser = async (req, res) => {
-  try {
-    await userService.deleteUser(req.params.id);
-    res.status(204).send();
+    const user = await prisma.user.update({
+      where: { id: req.user.id },
+      data: updateData,
+      select: { id: true, email: true, name: true, role: true }
+    });
+    res.json(user);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
 module.exports = {
-  getAllUsers,
-  getUserById,
-  createUser,
-  deleteUser,
+  getMe,
+  updateMe
 };
