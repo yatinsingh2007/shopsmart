@@ -1,4 +1,4 @@
-const prisma = require('../models/prisma');
+const prisma = require('../lib/prisma');
 
 const getDashboardMetrics = async () => {
   const totalUsers = await prisma.user.count({
