@@ -11,6 +11,7 @@ const requireAuth = (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
     req.user = decoded;
     next();
+  // eslint-disable-next-line no-unused-vars
   } catch (error) {
     return res.status(401).json({ message: 'Invalid or expired token' });
   }

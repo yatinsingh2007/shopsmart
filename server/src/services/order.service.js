@@ -59,7 +59,7 @@ const createOrder = async (userId, data) => {
 };
 
 const getUserOrders = async (userId) => {
-  return await prisma.order.findMany({
+  return prisma.order.findMany({
     where: { userId },
     include: { items: { include: { product: true } } },
     orderBy: { createdAt: 'desc' }
@@ -67,7 +67,7 @@ const getUserOrders = async (userId) => {
 };
 
 const getOrderById = async (userId, orderId) => {
-  return await prisma.order.findFirst({
+  return prisma.order.findFirst({
     where: { id: parseInt(orderId), userId },
     include: { items: { include: { product: true } } }
   });

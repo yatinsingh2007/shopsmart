@@ -26,25 +26,25 @@ const getAllProducts = async (filters = {}) => {
 };
 
 const getProductById = async (id) => {
-  return await prisma.product.findUnique({
+  return prisma.product.findUnique({
     where: { id: parseInt(id) },
     include: { category: true },
   });
 };
 
 const createProduct = async (data) => {
-  return await prisma.product.create({ data });
+  return prisma.product.create({ data });
 };
 
 const updateProduct = async (id, data) => {
-  return await prisma.product.update({
+  return prisma.product.update({
     where: { id: parseInt(id) },
     data,
   });
 };
 
 const deleteProduct = async (id) => {
-  return await prisma.product.delete({
+  return prisma.product.delete({
     where: { id: parseInt(id) },
   });
 };

@@ -56,6 +56,7 @@ const refreshToken = async (token) => {
     }
     
     return generateTokens(user);
+  // eslint-disable-next-line no-unused-vars
   } catch (error) {
     const newError = new Error('Invalid or expired refresh token');
     newError.statusCode = 401;

@@ -1,3 +1,4 @@
+// eslint-disable-next-line no-unused-vars
 const errorHandler = (err, req, res, next) => {
   console.error(err.stack);
 
@@ -12,6 +13,7 @@ const errorHandler = (err, req, res, next) => {
   });
 };
 
+// eslint-disable-next-line no-unused-vars
 const notFoundHandler = (req, res, next) => {
   res.status(404).json({
     success: false,
