@@ -18,10 +18,11 @@ output "client_ecr_repository_arn" {
   value       = aws_ecr_repository.client.arn
 }
 
-output "ecr_push_policy_arn" {
-  description = "ARN of the IAM policy granting ECR push/pull access"
-  value       = aws_iam_policy.ecr_push.arn
-}
+# Commented out — IAM policy creation is disabled for lab accounts
+# output "ecr_push_policy_arn" {
+#   description = "ARN of the IAM policy granting ECR push/pull access"
+#   value       = aws_iam_policy.ecr_push.arn
+# }
 
 output "aws_region" {
   description = "AWS region where ECR repositories are created"

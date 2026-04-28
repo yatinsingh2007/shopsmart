@@ -104,42 +104,46 @@ resource "aws_ecr_lifecycle_policy" "client" {
 
 # ─────────────────────────────────────────────
 #  IAM Policy — ECR Push (for CI/CD)
+#  NOTE: Skipped — AWS Academy lab accounts lack
+#  iam:CreatePolicy / iam:TagPolicy permissions.
+#  For production AWS accounts, uncomment the
+#  block below to create a least-privilege policy.
 # ─────────────────────────────────────────────
-data "aws_iam_policy_document" "ecr_push" {
-  statement {
-    sid    = "ECRAuthToken"
-    effect = "Allow"
-    actions = [
-      "ecr:GetAuthorizationToken"
-    ]
-    resources = ["*"]
-  }
-
-  statement {
-    sid    = "ECRPushPull"
-    effect = "Allow"
-    actions = [
-      "ecr:BatchCheckLayerAvailability",
-      "ecr:GetDownloadUrlForLayer",
-      "ecr:GetRepositoryPolicy",
-      "ecr:DescribeRepositories",
-      "ecr:ListImages",
-      "ecr:DescribeImages",
-      "ecr:BatchGetImage",
-      "ecr:InitiateLayerUpload",
-      "ecr:UploadLayerPart",
-      "ecr:CompleteLayerUpload",
-      "ecr:PutImage"
-    ]
-    resources = [
-      aws_ecr_repository.server.arn,
-      aws_ecr_repository.client.arn,
-    ]
-  }
-}
-
-resource "aws_iam_policy" "ecr_push" {
-  name        = "${var.project_name}-ecr-push-policy"
-  description = "Allows pushing and pulling images from ShopSmart ECR repositories"
-  policy      = data.aws_iam_policy_document.ecr_push.json
-}
+# data "aws_iam_policy_document" "ecr_push" {
+#   statement {
+#     sid    = "ECRAuthToken"
+#     effect = "Allow"
+#     actions = [
+#       "ecr:GetAuthorizationToken"
+#     ]
+#     resources = ["*"]
+#   }
+#
+#   statement {
+#     sid    = "ECRPushPull"
+#     effect = "Allow"
+#     actions = [
+#       "ecr:BatchCheckLayerAvailability",
+#       "ecr:GetDownloadUrlForLayer",
+#       "ecr:GetRepositoryPolicy",
+#       "ecr:DescribeRepositories",
+#       "ecr:ListImages",
+#       "ecr:DescribeImages",
+#       "ecr:BatchGetImage",
+#       "ecr:InitiateLayerUpload",
+#       "ecr:UploadLayerPart",
+#       "ecr:CompleteLayerUpload",
+#       "ecr:PutImage"
+#     ]
+#     resources = [
+#       aws_ecr_repository.server.arn,
+#       aws_ecr_repository.client.arn,
+#     ]
+#   }
+# }
+#
+# resource "aws_iam_policy" "ecr_push" {
+#   name        = "${var.project_name}-ecr-push-policy"
+#   description = "Allows pushing and pulling images from ShopSmart ECR repositories"
+#   policy      = data.aws_iam_policy_document.ecr_push.json
+# }
