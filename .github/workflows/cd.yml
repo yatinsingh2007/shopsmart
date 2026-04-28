@@ -1,0 +1,85 @@
+name: CD — Build & Push to ECR
+
+on:
+  push:
+    branches: [ main, master ]
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+
+jobs:
+  build-and-push:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── AWS credentials ────────────────────────────────────────────
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ secrets.AWS_REGION }}
+
+      # ── Login to ECR ───────────────────────────────────────────────
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ── Derive image metadata ──────────────────────────────────────
+      - name: Set image tags
+        id: meta
+        run: |
+          REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "registry=${REGISTRY}"                                             >> $GITHUB_OUTPUT
+          echo "server_image=${REGISTRY}/shopsmart-server"                        >> $GITHUB_OUTPUT
+          echo "client_image=${REGISTRY}/shopsmart-client"                        >> $GITHUB_OUTPUT
+          echo "sha_tag=sha-${SHORT_SHA}"                                         >> $GITHUB_OUTPUT
+
+      # ── Set up Docker Buildx (multi-platform + caching) ───────────
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── Build & push SERVER image ──────────────────────────────────
+      - name: Build and push server image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./server
+          file: ./server/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.server_image }}:latest
+            ${{ steps.meta.outputs.server_image }}:${{ steps.meta.outputs.sha_tag }}
+          cache-from: type=gha,scope=server
+          cache-to:   type=gha,mode=max,scope=server
+
+      # ── Build & push CLIENT image ──────────────────────────────────
+      - name: Build and push client image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./client
+          file: ./client/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.client_image }}:latest
+            ${{ steps.meta.outputs.client_image }}:${{ steps.meta.outputs.sha_tag }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
+          cache-from: type=gha,scope=client
+          cache-to:   type=gha,mode=max,scope=client
+
+      # ── Summary ───────────────────────────────────────────────────
+      - name: Print pushed image tags
+        run: |
+          echo "### 🐳 Images pushed to ECR" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Tag |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| server  | \`latest\`, \`${{ steps.meta.outputs.sha_tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| client  | \`latest\`, \`${{ steps.meta.outputs.sha_tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry:** \`${{ steps.meta.outputs.registry }}\`" >> $GITHUB_STEP_SUMMARY
