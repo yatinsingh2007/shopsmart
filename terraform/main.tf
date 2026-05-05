@@ -84,46 +84,27 @@ resource "aws_route_table_association" "public" {
 # ─────────────────────────────────────────────
 #  Security Groups
 # ─────────────────────────────────────────────
-resource "aws_security_group" "alb" {
-  name        = "${var.project_name}-alb-sg"
-  description = "Allow HTTP inbound traffic"
+
+
+resource "aws_security_group" "ecs_tasks" {
+  name        = "${var.project_name}-ecs-tasks-sg"
+  description = "Allow inbound access to ECS tasks"
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description = "HTTP from anywhere"
-    from_port   = 80
-    to_port     = 80
+    description = "Direct traffic to server"
+    from_port   = var.server_port
+    to_port     = var.server_port
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+  ingress {
+    description = "Direct traffic to client"
+    from_port   = var.client_port
+    to_port     = var.client_port
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-resource "aws_security_group" "ecs_tasks" {
-  name        = "${var.project_name}-ecs-tasks-sg"
-  description = "Allow inbound access from ALB only"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    description     = "Traffic from ALB to server"
-    from_port       = var.server_port
-    to_port         = var.server_port
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-
-  ingress {
-    description     = "Traffic from ALB to client"
-    from_port       = var.client_port
-    to_port         = var.client_port
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
   }
 
   egress {
@@ -141,83 +122,7 @@ data "aws_iam_role" "lab_role" {
   name = "LabRole"
 }
 
-# ─────────────────────────────────────────────
-#  Application Load Balancer
-# ─────────────────────────────────────────────
-resource "aws_lb" "main" {
-  name               = "${var.project_name}-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = aws_subnet.public[*].id
 
-  tags = {
-    Name = "${var.project_name}-alb"
-  }
-}
-
-resource "aws_lb_target_group" "main" {
-  name        = "${var.project_name}-tg"
-  port        = var.server_port
-  protocol    = "HTTP"
-  vpc_id      = aws_vpc.main.id
-  target_type = "ip"
-
-  health_check {
-    healthy_threshold   = "3"
-    interval            = "30"
-    protocol            = "HTTP"
-    matcher             = "200"
-    timeout             = "3"
-    path                = "/api/health"
-    unhealthy_threshold = "2"
-  }
-}
-
-resource "aws_lb_target_group" "client" {
-  name        = "${var.project_name}-client-tg"
-  port        = var.client_port
-  protocol    = "HTTP"
-  vpc_id      = aws_vpc.main.id
-  target_type = "ip"
-
-  health_check {
-    healthy_threshold   = "3"
-    interval            = "30"
-    protocol            = "HTTP"
-    matcher             = "200"
-    timeout             = "3"
-    path                = "/"
-    unhealthy_threshold = "2"
-  }
-}
-
-resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.client.arn
-  }
-}
-
-resource "aws_lb_listener_rule" "api" {
-  listener_arn = aws_lb_listener.http.arn
-  priority     = 100
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.main.arn
-  }
-
-  condition {
-    path_pattern {
-      values = ["/api/*"]
-    }
-  }
-}
 
 # ─────────────────────────────────────────────
 #  ECS Cluster & Logs
@@ -278,11 +183,7 @@ resource "aws_ecs_service" "main" {
     assign_public_ip = true
   }
 
-  load_balancer {
-    target_group_arn = aws_lb_target_group.main.arn
-    container_name   = var.project_name
-    container_port   = var.server_port
-  }
+
 
   deployment_controller {
     type = "ECS"
@@ -346,11 +247,7 @@ resource "aws_ecs_service" "client" {
     assign_public_ip = true
   }
 
-  load_balancer {
-    target_group_arn = aws_lb_target_group.client.arn
-    container_name   = "${var.project_name}-client"
-    container_port   = var.client_port
-  }
+
 
   deployment_controller {
     type = "ECS"
