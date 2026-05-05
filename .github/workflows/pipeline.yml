@@ -67,6 +67,45 @@ jobs:
         working-directory: ./terraform
         run: terraform validate
 
+      - name: Cleanup Orphaned Resources
+        working-directory: ./terraform
+        run: |
+          # If resources exist in AWS but NOT in Terraform state, delete them so Terraform can recreate them.
+          if ! terraform state list | grep -q "aws_ecr_repository.server"; then
+            aws ecr delete-repository --repository-name shopsmart-server --force 2>/dev/null || true
+          fi
+          if ! terraform state list | grep -q "aws_ecr_repository.client"; then
+            aws ecr delete-repository --repository-name shopsmart-client --force 2>/dev/null || true
+          fi
+          if ! terraform state list | grep -q "aws_ecr_repository.db"; then
+            aws ecr delete-repository --repository-name shopsmart-db --force 2>/dev/null || true
+          fi
+          
+          if ! terraform state list | grep -q "aws_cloudwatch_log_group.main"; then
+            aws logs delete-log-group --log-group-name /ecs/shopsmart 2>/dev/null || true
+          fi
+          
+          if ! terraform state list | grep -q "aws_lb.main"; then
+            ALB_ARN=$(aws elbv2 describe-load-balancers --names shopsmart-alb --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null || echo "")
+            if [ -n "$ALB_ARN" ] && [ "$ALB_ARN" != "None" ] && [ "$ALB_ARN" != "null" ]; then
+              aws elbv2 delete-load-balancer --load-balancer-arn "$ALB_ARN" 2>/dev/null || true
+              sleep 10
+            fi
+          fi
+          
+          if ! terraform state list | grep -q "aws_lb_target_group.main"; then
+            TG_ARN=$(aws elbv2 describe-target-groups --names shopsmart-tg --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null || echo "")
+            if [ -n "$TG_ARN" ] && [ "$TG_ARN" != "None" ] && [ "$TG_ARN" != "null" ]; then
+              aws elbv2 delete-target-group --target-group-arn "$TG_ARN" 2>/dev/null || true
+            fi
+          fi
+          
+          if ! terraform state list | grep -q "aws_ecs_cluster.main"; then
+            aws ecs update-service --cluster shopsmart-cluster --service shopsmart-service --desired-count 0 2>/dev/null || true
+            aws ecs delete-service --cluster shopsmart-cluster --service shopsmart-service --force 2>/dev/null || true
+            aws ecs delete-cluster --cluster shopsmart-cluster 2>/dev/null || true
+          fi
+
       - name: Terraform Apply
         working-directory: ./terraform
         run: terraform apply -auto-approve
