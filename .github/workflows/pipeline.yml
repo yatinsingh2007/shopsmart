@@ -85,11 +85,17 @@ jobs:
             aws logs delete-log-group --log-group-name /ecs/shopsmart 2>/dev/null || true
           fi
           
+          if ! terraform state list | grep -q "aws_ecs_service.main"; then
+            aws ecs update-service --cluster shopsmart-cluster --service shopsmart-service --desired-count 0 2>/dev/null || true
+            aws ecs delete-service --cluster shopsmart-cluster --service shopsmart-service --force 2>/dev/null || true
+            aws ecs wait services-inactive --cluster shopsmart-cluster --services shopsmart-service 2>/dev/null || sleep 15
+          fi
+          
           if ! terraform state list | grep -q "aws_lb.main"; then
             ALB_ARN=$(aws elbv2 describe-load-balancers --names shopsmart-alb --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null || echo "")
             if [ -n "$ALB_ARN" ] && [ "$ALB_ARN" != "None" ] && [ "$ALB_ARN" != "null" ]; then
               aws elbv2 delete-load-balancer --load-balancer-arn "$ALB_ARN" 2>/dev/null || true
-              sleep 10
+              aws elbv2 wait load-balancers-deleted --load-balancer-arns "$ALB_ARN" 2>/dev/null || sleep 15
             fi
           fi
           
@@ -98,12 +104,6 @@ jobs:
             if [ -n "$TG_ARN" ] && [ "$TG_ARN" != "None" ] && [ "$TG_ARN" != "null" ]; then
               aws elbv2 delete-target-group --target-group-arn "$TG_ARN" 2>/dev/null || true
             fi
-          fi
-          
-          if ! terraform state list | grep -q "aws_ecs_service.main"; then
-            aws ecs update-service --cluster shopsmart-cluster --service shopsmart-service --desired-count 0 2>/dev/null || true
-            aws ecs delete-service --cluster shopsmart-cluster --service shopsmart-service --force 2>/dev/null || true
-            sleep 15
           fi
           
           if ! terraform state list | grep -q "aws_ecs_cluster.main"; then
