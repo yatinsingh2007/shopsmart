@@ -41,7 +41,7 @@ jobs:
     name: Build & Push to ECR
     needs: lint-and-test
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+    if: github.event_name == 'workflow_dispatch'
     outputs:
       server_image: ${{ steps.meta.outputs.server_image }}
       client_image: ${{ steps.meta.outputs.client_image }}
@@ -99,7 +99,7 @@ jobs:
     name: Infrastructure (Terraform)
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+    if: github.event_name == 'workflow_dispatch'
 
     steps:
       - uses: actions/checkout@v4
@@ -166,7 +166,7 @@ jobs:
     name: Deploy to ECS
     needs: terraform
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+    if: github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Configure AWS credentials
