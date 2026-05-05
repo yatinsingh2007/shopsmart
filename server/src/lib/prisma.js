@@ -1,5 +1,8 @@
 const { PrismaClient } = require('@prisma/client');
 
-const prisma = new PrismaClient();
+// Global variable to prevent multiple Prisma client instances
+if (!global.prisma) {
+  global.prisma = new PrismaClient();
+}
 
-module.exports = prisma;
+module.exports = global.prisma;
