@@ -100,9 +100,13 @@ jobs:
             fi
           fi
           
-          if ! terraform state list | grep -q "aws_ecs_cluster.main"; then
+          if ! terraform state list | grep -q "aws_ecs_service.main"; then
             aws ecs update-service --cluster shopsmart-cluster --service shopsmart-service --desired-count 0 2>/dev/null || true
             aws ecs delete-service --cluster shopsmart-cluster --service shopsmart-service --force 2>/dev/null || true
+            sleep 15
+          fi
+          
+          if ! terraform state list | grep -q "aws_ecs_cluster.main"; then
             aws ecs delete-cluster --cluster shopsmart-cluster 2>/dev/null || true
           fi
 
