@@ -2,9 +2,9 @@ name: Unified CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -16,12 +16,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: |
             server/package-lock.json
             client/package-lock.json
@@ -40,11 +40,70 @@ jobs:
           npm ci
           npm run lint
 
-  terraform:
-    name: Infrastructure (Terraform)
+  build-and-push:
+    name: Build & Push to ECR
     needs: lint-and-test
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
+    outputs:
+      server_image: ${{ steps.meta.outputs.server_image }}
+      client_image: ${{ steps.meta.outputs.client_image }}
+      sha_tag: ${{ steps.meta.outputs.sha_tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tags
+        id: meta
+        run: |
+          REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+
+          echo "server_image=${REGISTRY}/${{ env.PROJECT_NAME }}-server" >> $GITHUB_OUTPUT
+          echo "client_image=${REGISTRY}/${{ env.PROJECT_NAME }}-client" >> $GITHUB_OUTPUT
+          echo "sha_tag=sha-${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push server image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./server
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ steps.meta.outputs.server_image }}:${{ steps.meta.outputs.sha_tag }}
+
+      - name: Build and push client image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./client
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ steps.meta.outputs.client_image }}:${{ steps.meta.outputs.sha_tag }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
+
+  terraform:
+    name: Infrastructure (Terraform)
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+
     steps:
       - uses: actions/checkout@v4
 
@@ -67,117 +126,20 @@ jobs:
         working-directory: ./terraform
         run: terraform validate
 
-      - name: Cleanup Orphaned Resources
-        working-directory: ./terraform
-        run: |
-          # If resources exist in AWS but NOT in Terraform state, delete them so Terraform can recreate them.
-          if ! terraform state list | grep -q "aws_ecr_repository.server"; then
-            aws ecr delete-repository --repository-name shopsmart-server --force 2>/dev/null || true
-          fi
-          if ! terraform state list | grep -q "aws_ecr_repository.client"; then
-            aws ecr delete-repository --repository-name shopsmart-client --force 2>/dev/null || true
-          fi
-          if ! terraform state list | grep -q "aws_ecr_repository.db"; then
-            aws ecr delete-repository --repository-name shopsmart-db --force 2>/dev/null || true
-          fi
-          
-          if ! terraform state list | grep -q "aws_cloudwatch_log_group.main"; then
-            aws logs delete-log-group --log-group-name /ecs/shopsmart 2>/dev/null || true
-          fi
-          
-          if ! terraform state list | grep -q "aws_ecs_service.main"; then
-            aws ecs update-service --cluster shopsmart-cluster --service shopsmart-service --desired-count 0 2>/dev/null || true
-            aws ecs delete-service --cluster shopsmart-cluster --service shopsmart-service --force 2>/dev/null || true
-            aws ecs wait services-inactive --cluster shopsmart-cluster --services shopsmart-service 2>/dev/null || sleep 15
-          fi
-          
-          if ! terraform state list | grep -q "aws_lb.main"; then
-            ALB_ARN=$(aws elbv2 describe-load-balancers --names shopsmart-alb --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null || echo "")
-            if [ -n "$ALB_ARN" ] && [ "$ALB_ARN" != "None" ] && [ "$ALB_ARN" != "null" ]; then
-              aws elbv2 delete-load-balancer --load-balancer-arn "$ALB_ARN" 2>/dev/null || true
-              aws elbv2 wait load-balancers-deleted --load-balancer-arns "$ALB_ARN" 2>/dev/null || sleep 15
-            fi
-          fi
-          
-          if ! terraform state list | grep -q "aws_lb_target_group.main"; then
-            TG_ARN=$(aws elbv2 describe-target-groups --names shopsmart-tg --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null || echo "")
-            if [ -n "$TG_ARN" ] && [ "$TG_ARN" != "None" ] && [ "$TG_ARN" != "null" ]; then
-              aws elbv2 delete-target-group --target-group-arn "$TG_ARN" 2>/dev/null || true
-            fi
-          fi
-          
-          if ! terraform state list | grep -q "aws_ecs_cluster.main"; then
-            aws ecs delete-cluster --cluster shopsmart-cluster 2>/dev/null || true
-          fi
-
       - name: Terraform Apply
         working-directory: ./terraform
-        run: terraform apply -auto-approve
-
-  build-and-push:
-    name: Build & Push to ECR
-    needs: terraform
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Set image tags
-        id: meta
         run: |
-          REGISTRY=${{ steps.login-ecr.outputs.registry }}
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          echo "registry=${REGISTRY}" >> $GITHUB_OUTPUT
-          echo "server_image=${REGISTRY}/${{ env.PROJECT_NAME }}-server" >> $GITHUB_OUTPUT
-          echo "client_image=${REGISTRY}/${{ env.PROJECT_NAME }}-client" >> $GITHUB_OUTPUT
-          echo "sha_tag=sha-${SHORT_SHA}" >> $GITHUB_OUTPUT
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push server image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./server
-          file: ./server/Dockerfile
-          push: true
-          tags: |
-            ${{ steps.meta.outputs.server_image }}:latest
-            ${{ steps.meta.outputs.server_image }}:${{ steps.meta.outputs.sha_tag }}
-          cache-from: type=gha,scope=server
-          cache-to:   type=gha,mode=max,scope=server
-
-      - name: Build and push client image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./client
-          file: ./client/Dockerfile
-          push: true
-          tags: |
-            ${{ steps.meta.outputs.client_image }}:latest
-            ${{ steps.meta.outputs.client_image }}:${{ steps.meta.outputs.sha_tag }}
-          build-args: |
-            NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
-          cache-from: type=gha,scope=client
-          cache-to:   type=gha,mode=max,scope=client
+          terraform apply \
+            -var="server_image=${{ needs.build-and-push.outputs.server_image }}:${{ needs.build-and-push.outputs.sha_tag }}" \
+            -var="client_image=${{ needs.build-and-push.outputs.client_image }}:${{ needs.build-and-push.outputs.sha_tag }}" \
+            -auto-approve
 
   deploy:
     name: Deploy to ECS
-    needs: build-and-push
+    needs: terraform
     runs-on: ubuntu-latest
     if: github.event_name == 'push'
+
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
