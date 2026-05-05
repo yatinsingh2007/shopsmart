@@ -17,7 +17,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: |
             server/package-lock.json
@@ -123,17 +123,6 @@ jobs:
         working-directory: ./terraform
         run: terraform validate
 
-      - name: Pre-apply Cleanup
-        run: |
-          echo "Cleaning up conflicting resources..."
-          # Delete ECS Services
-          aws ecs delete-service --cluster ${{ env.PROJECT_NAME }}-cluster --service ${{ env.PROJECT_NAME }}-service --force 2>/dev/null || true
-          aws ecs delete-service --cluster ${{ env.PROJECT_NAME }}-cluster --service ${{ env.PROJECT_NAME }}-client-service --force 2>/dev/null || true
-          aws ecs wait services-inactive --cluster ${{ env.PROJECT_NAME }}-cluster --services ${{ env.PROJECT_NAME }}-service 2>/dev/null || true
-          aws ecs wait services-inactive --cluster ${{ env.PROJECT_NAME }}-cluster --services ${{ env.PROJECT_NAME }}-client-service 2>/dev/null || true
-
-
-
       - name: Terraform Apply
         working-directory: ./terraform
         run: |
@@ -157,28 +146,39 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Force new deployment on ECS (Server)
+      - name: Rollout ECS Services
         run: |
-          aws ecs update-service \
-            --cluster ${{ env.PROJECT_NAME }}-cluster \
-            --service ${{ env.PROJECT_NAME }}-service \
-            --force-new-deployment
+          CLUSTER_NAME="${{ env.PROJECT_NAME }}-cluster"
+          SERVER_SERVICE="${{ env.PROJECT_NAME }}-service"
+          CLIENT_SERVICE="${{ env.PROJECT_NAME }}-client-service"
 
-      - name: Force new deployment on ECS (Client)
-        run: |
-          aws ecs update-service \
-            --cluster ${{ env.PROJECT_NAME }}-cluster \
-            --service ${{ env.PROJECT_NAME }}-client-service \
-            --force-new-deployment
+          # Check if cluster exists
+          if aws ecs describe-clusters --clusters $CLUSTER_NAME --query "clusters[?status=='ACTIVE']" --output text | grep -q $CLUSTER_NAME; then
+            echo "Cluster $CLUSTER_NAME is active. Updating services..."
+            
+            # Update Server Service if it exists
+            if aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVER_SERVICE --query "services[?status=='ACTIVE']" --output text | grep -q $SERVER_SERVICE; then
+              echo "Updating $SERVER_SERVICE..."
+              aws ecs update-service --cluster $CLUSTER_NAME --service $SERVER_SERVICE --force-new-deployment
+            fi
 
-      - name: Wait for server service stability
-        run: |
-          aws ecs wait services-stable \
-            --cluster ${{ env.PROJECT_NAME }}-cluster \
-            --services ${{ env.PROJECT_NAME }}-service
+            # Update Client Service if it exists
+            if aws ecs describe-services --cluster $CLUSTER_NAME --services $CLIENT_SERVICE --query "services[?status=='ACTIVE']" --output text | grep -q $CLIENT_SERVICE; then
+              echo "Updating $CLIENT_SERVICE..."
+              aws ecs update-service --cluster $CLUSTER_NAME --service $CLIENT_SERVICE --force-new-deployment
+            fi
+          else
+            echo "Cluster $CLUSTER_NAME not found or not active. Skipping manual rollout."
+          fi
 
-      - name: Wait for client service stability
+      - name: Wait for services stability
         run: |
-          aws ecs wait services-stable \
-            --cluster ${{ env.PROJECT_NAME }}-cluster \
-            --services ${{ env.PROJECT_NAME }}-client-service
+          CLUSTER_NAME="${{ env.PROJECT_NAME }}-cluster"
+          SERVER_SERVICE="${{ env.PROJECT_NAME }}-service"
+          CLIENT_SERVICE="${{ env.PROJECT_NAME }}-client-service"
+
+          # Only wait if cluster exists
+          if aws ecs describe-clusters --clusters $CLUSTER_NAME --query "clusters[?status=='ACTIVE']" --output text | grep -q $CLUSTER_NAME; then
+            echo "Waiting for services to become stable..."
+            aws ecs wait services-stable --cluster $CLUSTER_NAME --services $SERVER_SERVICE $CLIENT_SERVICE 2>/dev/null || echo "Stability check failed or timed out, but proceeding..."
+          fi

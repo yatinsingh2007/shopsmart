@@ -37,14 +37,14 @@ output "registry_url" {
 # ─────────────────────────────────────────────
 #  ECS & ALB Outputs
 # ─────────────────────────────────────────────
-output "alb_dns_name" {
-  description = "DNS name of the Application Load Balancer"
-  value       = aws_lb.main.dns_name
+output "server_ecs_service_name" {
+  description = "Name of the server ECS service"
+  value       = aws_ecs_service.main.name
 }
 
-output "ecs_service_name" {
-  description = "Name of the ECS service"
-  value       = aws_ecs_service.main.name
+output "client_ecs_service_name" {
+  description = "Name of the client ECS service"
+  value       = aws_ecs_service.client.name
 }
 
 output "ecs_cluster_name" {
