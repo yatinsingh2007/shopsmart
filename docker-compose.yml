@@ -6,11 +6,11 @@ services:
     container_name: shopsmart-db
     restart: always
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-admin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password123}
-      POSTGRES_DB: ${POSTGRES_DB:-shopsmart}
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: shopsmart
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -20,24 +20,24 @@ services:
       retries: 5
 
   server:
+    platform: linux/amd64   # 🔴 force correct architecture
     build:
       context: ./server
       dockerfile: Dockerfile
     container_name: shopsmart-server
     restart: always
     ports:
-      - "5000:5000"
+      - "2000:5000"
     environment:
-      DATABASE_URL: postgresql://admin:password123@postgres:5432/shopsmart?schema=public
-      PORT: 5000
+      DATABASE_URL: postgresql://admin:password123@postgres:5432/shopsmart
+      PORT: 2000
       NODE_ENV: production
     depends_on:
       postgres:
         condition: service_healthy
-    networks:
-      - shopsmart-network
 
   client:
+    platform: linux/amd64   # 🔴 same here
     build:
       context: ./client
       dockerfile: Dockerfile
@@ -47,12 +47,6 @@ services:
       - "3000:3000"
     depends_on:
       - server
-    networks:
-      - shopsmart-network
-
-networks:
-  shopsmart-network:
-    driver: bridge
 
 volumes:
   postgres_data:

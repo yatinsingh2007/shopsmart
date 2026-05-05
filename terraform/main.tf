@@ -9,13 +9,12 @@ terraform {
   }
 
   # Uncomment this block to use remote state (recommended for teams)
-  # backend "s3" {
-  #   bucket         = "shopsmart-terraform-state"
-  #   key            = "ecr/terraform.tfstate"
-  #   region         = "us-east-1"
-  #   dynamodb_table = "shopsmart-terraform-locks"
-  #   encrypt        = true
-  # }
+  backend "s3" {
+    bucket         = "shopsmart-tfstate-192661826032"
+    key            = "terraform.tfstate"
+    region         = "us-east-1"
+    encrypt        = true
+  }
 }
 
 provider "aws" {
@@ -382,4 +381,96 @@ resource "aws_ecr_lifecycle_policy" "client" {
       }
     ]
   })
+}
+
+resource "aws_ecr_repository" "db" {
+  name                 = "${var.project_name}-db"
+  image_tag_mutability = var.image_tag_mutability
+  force_delete         = true
+
+  image_scanning_configuration {
+    scan_on_push = var.scan_on_push
+  }
+
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
+}
+
+resource "aws_ecr_lifecycle_policy" "db" {
+  repository = aws_ecr_repository.db.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Keep only the last ${var.max_image_count} tagged images"
+        selection = {
+          tagStatus     = "tagged"
+          tagPrefixList = ["v", "sha-"]
+          countType     = "imageCountMoreThan"
+          countNumber   = var.max_image_count
+        }
+        action = {
+          type = "expire"
+        }
+      },
+      {
+        rulePriority = 2
+        description  = "Expire untagged images older than 7 days"
+        selection = {
+          tagStatus   = "untagged"
+          countType   = "sinceImagePushed"
+          countUnit   = "days"
+          countNumber = 7
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
+}
+
+# ─────────────────────────────────────────────
+#  S3 Bucket for Assets / General Storage
+# ─────────────────────────────────────────────
+resource "random_string" "s3_suffix" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
+resource "aws_s3_bucket" "assets" {
+  bucket = "${var.project_name}-assets-${random_string.s3_suffix.result}"
+
+  tags = {
+    Name = "${var.project_name}-assets"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "assets_versioning" {
+  bucket = aws_s3_bucket.assets.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "assets_encryption" {
+  bucket = aws_s3_bucket.assets.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "assets_public_access_block" {
+  bucket = aws_s3_bucket.assets.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
