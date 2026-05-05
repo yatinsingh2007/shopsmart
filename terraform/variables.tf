@@ -91,3 +91,15 @@ variable "desired_count" {
   type        = number
   default     = 1
 }
+
+variable "server_image" {
+  description = "Docker image for the server container"
+  type        = string
+  default     = ""
+}
+
+variable "client_image" {
+  description = "Docker image for the client container"
+  type        = string
+  default     = ""
+}
