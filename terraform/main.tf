@@ -150,7 +150,7 @@ resource "aws_ecs_task_definition" "main" {
 
   container_definitions = jsonencode([{
     name      = var.project_name
-    image     = var.server_image != "" ? var.server_image : "${aws_ecr_repository.server.repository_url}:latest"
+    image     = "${aws_ecr_repository.server.repository_url}:${var.server_image_tag}"
     essential = true
     portMappings = [{
       containerPort = var.server_port
@@ -214,7 +214,7 @@ resource "aws_ecs_task_definition" "client" {
 
   container_definitions = jsonencode([{
     name      = "${var.project_name}-client"
-    image     = var.client_image != "" ? var.client_image : "${aws_ecr_repository.client.repository_url}:latest"
+    image     = "${aws_ecr_repository.client.repository_url}:${var.client_image_tag}"
     essential = true
     portMappings = [{
       containerPort = var.client_port

@@ -68,6 +68,8 @@ jobs:
           REGISTRY=${{ steps.login-ecr.outputs.registry }}
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
 
+          echo "ECR Registry: $REGISTRY"
+          
           echo "server_image=${REGISTRY}/${{ env.PROJECT_NAME }}-server" >> $GITHUB_OUTPUT
           echo "client_image=${REGISTRY}/${{ env.PROJECT_NAME }}-client" >> $GITHUB_OUTPUT
           echo "sha_tag=sha-${SHORT_SHA}" >> $GITHUB_OUTPUT
@@ -82,7 +84,8 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ steps.meta.outputs.server_image }}:${{ steps.meta.outputs.sha_tag }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-server:${{ steps.meta.outputs.sha_tag }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-server:latest
 
       - name: Build and push client image
         uses: docker/build-push-action@v5
@@ -91,7 +94,8 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ steps.meta.outputs.client_image }}:${{ steps.meta.outputs.sha_tag }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-client:${{ steps.meta.outputs.sha_tag }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT_NAME }}-client:latest
           build-args: |
             NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
 
@@ -127,8 +131,8 @@ jobs:
         working-directory: ./terraform
         run: |
           terraform apply \
-            -var="server_image=${{ needs.build-and-push.outputs.server_image }}:${{ needs.build-and-push.outputs.sha_tag }}" \
-            -var="client_image=${{ needs.build-and-push.outputs.client_image }}:${{ needs.build-and-push.outputs.sha_tag }}" \
+            -var="server_image_tag=${{ needs.build-and-push.outputs.sha_tag }}" \
+            -var="client_image_tag=${{ needs.build-and-push.outputs.sha_tag }}" \
             -auto-approve
 
   deploy:

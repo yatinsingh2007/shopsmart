@@ -98,14 +98,15 @@ variable "desired_count" {
   default     = 1
 }
 
-variable "server_image" {
-  description = "Docker image for the server container"
+variable "server_image_tag" {
+  description = "Docker image tag for the server container"
   type        = string
-  default     = ""
+  default     = "latest"
 }
 
-variable "client_image" {
-  description = "Docker image for the client container"
+variable "client_image_tag" {
+  description = "Docker image tag for the client container"
   type        = string
-  default     = ""
+  default     = "latest"
 }
+
