@@ -38,7 +38,7 @@ export const useAuthStore = create<AuthState>()(
         try {
           const res = await api.get('/users/profile');
           set({ user: res.data, isAuthenticated: true, isLoading: false });
-        } catch (error) {
+        } catch {
           set({ user: null, isAuthenticated: false, isLoading: false });
         }
       },

@@ -13,6 +13,7 @@ export default function CartPage() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 
@@ -24,7 +25,7 @@ export default function CartPage() {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 text-center">
         <h2 className="text-3xl font-extrabold text-gray-900 mb-6">Your Cart is Empty</h2>
-        <p className="text-gray-500 mb-8">Looks like you haven't added anything to your cart yet.</p>
+        <p className="text-gray-500 mb-8">Looks like you haven&apos;t added anything to your cart yet.</p>
         <Link href="/products" className="inline-block bg-blue-600 text-white font-medium py-3 px-8 rounded-md hover:bg-blue-700 transition">
           Start Shopping
         </Link>

@@ -35,6 +35,7 @@ export default function CheckoutPage() {
       await api.post('/orders', { shippingAddress: address });
       clearCart();
       router.push('/profile?orderSuccess=true');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setError(err.response?.data?.message || 'Checkout failed. Please try again.');
       setLoading(false);
