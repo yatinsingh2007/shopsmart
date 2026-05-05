@@ -111,9 +111,17 @@ resource "aws_security_group" "ecs_tasks" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description     = "Traffic from ALB"
-    from_port       = var.container_port
-    to_port         = var.container_port
+    description     = "Traffic from ALB to server"
+    from_port       = var.server_port
+    to_port         = var.server_port
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb.id]
+  }
+
+  ingress {
+    description     = "Traffic from ALB to client"
+    from_port       = var.client_port
+    to_port         = var.client_port
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
@@ -150,7 +158,7 @@ resource "aws_lb" "main" {
 
 resource "aws_lb_target_group" "main" {
   name        = "${var.project_name}-tg"
-  port        = var.container_port
+  port        = var.server_port
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
   target_type = "ip"
@@ -161,7 +169,25 @@ resource "aws_lb_target_group" "main" {
     protocol            = "HTTP"
     matcher             = "200"
     timeout             = "3"
-    path                = "/health"
+    path                = "/api/health"
+    unhealthy_threshold = "2"
+  }
+}
+
+resource "aws_lb_target_group" "client" {
+  name        = "${var.project_name}-client-tg"
+  port        = var.client_port
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
+  target_type = "ip"
+
+  health_check {
+    healthy_threshold   = "3"
+    interval            = "30"
+    protocol            = "HTTP"
+    matcher             = "200"
+    timeout             = "3"
+    path                = "/"
     unhealthy_threshold = "2"
   }
 }
@@ -173,7 +199,23 @@ resource "aws_lb_listener" "http" {
 
   default_action {
     type             = "forward"
+    target_group_arn = aws_lb_target_group.client.arn
+  }
+}
+
+resource "aws_lb_listener_rule" "api" {
+  listener_arn = aws_lb_listener.http.arn
+  priority     = 100
+
+  action {
+    type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/api/*"]
+    }
   }
 }
 
@@ -203,11 +245,11 @@ resource "aws_ecs_task_definition" "main" {
 
   container_definitions = jsonencode([{
     name      = var.project_name
-    image     = "${aws_ecr_repository.server.repository_url}:latest" # Initial placeholder
+    image     = var.server_image != "" ? var.server_image : "${aws_ecr_repository.server.repository_url}:latest"
     essential = true
     portMappings = [{
-      containerPort = var.container_port
-      hostPort      = var.container_port
+      containerPort = var.server_port
+      hostPort      = var.server_port
     }]
     logConfiguration = {
       logDriver = "awslogs"
@@ -239,14 +281,81 @@ resource "aws_ecs_service" "main" {
   load_balancer {
     target_group_arn = aws_lb_target_group.main.arn
     container_name   = var.project_name
-    container_port   = var.container_port
+    container_port   = var.server_port
   }
 
   deployment_controller {
     type = "ECS"
   }
 
-  # Ensure zero-downtime rolling updates
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
+  deployment_maximum_percent         = 200
+  deployment_minimum_healthy_percent = 100
+}
+
+resource "aws_cloudwatch_log_group" "client" {
+  name              = "/ecs/${var.project_name}-client"
+  retention_in_days = 7
+}
+
+resource "aws_ecs_task_definition" "client" {
+  family                   = "${var.project_name}-client"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = var.cpu
+  memory                   = var.memory
+  execution_role_arn       = data.aws_iam_role.lab_role.arn
+  task_role_arn            = data.aws_iam_role.lab_role.arn
+
+  container_definitions = jsonencode([{
+    name      = "${var.project_name}-client"
+    image     = var.client_image != "" ? var.client_image : "${aws_ecr_repository.client.repository_url}:latest"
+    essential = true
+    portMappings = [{
+      containerPort = var.client_port
+      hostPort      = var.client_port
+    }]
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.client.name
+        "awslogs-region"        = var.aws_region
+        "awslogs-stream-prefix" = "ecs"
+      }
+    }
+    environment = [
+      { name = "NODE_ENV", value = var.environment }
+    ]
+  }])
+}
+
+resource "aws_ecs_service" "client" {
+  name            = "${var.project_name}-client-service"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.client.arn
+  desired_count   = var.desired_count
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    security_groups  = [aws_security_group.ecs_tasks.id]
+    subnets          = aws_subnet.public[*].id
+    assign_public_ip = true
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.client.arn
+    container_name   = "${var.project_name}-client"
+    container_port   = var.client_port
+  }
+
+  deployment_controller {
+    type = "ECS"
+  }
+
   deployment_circuit_breaker {
     enable   = true
     rollback = true

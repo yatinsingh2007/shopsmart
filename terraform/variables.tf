@@ -68,10 +68,16 @@ variable "availability_zones" {
 # ─────────────────────────────────────────────
 #  ECS & Application Variables
 # ─────────────────────────────────────────────
-variable "container_port" {
-  description = "Port exposed by the container"
+variable "server_port" {
+  description = "Port exposed by the server container"
   type        = number
-  default     = 3001 # Default for the server service
+  default     = 5000
+}
+
+variable "client_port" {
+  description = "Port exposed by the client container"
+  type        = number
+  default     = 3000
 }
 
 variable "cpu" {

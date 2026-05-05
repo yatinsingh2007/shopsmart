@@ -126,6 +126,29 @@ jobs:
         working-directory: ./terraform
         run: terraform validate
 
+      - name: Pre-apply Cleanup
+        run: |
+          echo "Cleaning up conflicting resources..."
+          # Delete ECS Services
+          aws ecs delete-service --cluster ${{ env.PROJECT_NAME }}-cluster --service ${{ env.PROJECT_NAME }}-service --force 2>/dev/null || true
+          aws ecs delete-service --cluster ${{ env.PROJECT_NAME }}-cluster --service ${{ env.PROJECT_NAME }}-client-service --force 2>/dev/null || true
+          aws ecs wait services-inactive --cluster ${{ env.PROJECT_NAME }}-cluster --services ${{ env.PROJECT_NAME }}-service 2>/dev/null || true
+          aws ecs wait services-inactive --cluster ${{ env.PROJECT_NAME }}-cluster --services ${{ env.PROJECT_NAME }}-client-service 2>/dev/null || true
+
+          # Delete ALB
+          ALB_ARN=$(aws elbv2 describe-load-balancers --names ${{ env.PROJECT_NAME }}-alb --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null || echo "")
+          if [ -n "$ALB_ARN" ]; then
+            aws elbv2 delete-load-balancer --load-balancer-arn $ALB_ARN
+            aws elbv2 wait load-balancers-deleted --load-balancer-arns $ALB_ARN
+          fi
+
+          # Delete Target Groups
+          TG_ARN=$(aws elbv2 describe-target-groups --names ${{ env.PROJECT_NAME }}-tg --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null || echo "")
+          if [ -n "$TG_ARN" ]; then aws elbv2 delete-target-group --target-group-arn $TG_ARN; fi
+          
+          CLIENT_TG_ARN=$(aws elbv2 describe-target-groups --names ${{ env.PROJECT_NAME }}-client-tg --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null || echo "")
+          if [ -n "$CLIENT_TG_ARN" ]; then aws elbv2 delete-target-group --target-group-arn $CLIENT_TG_ARN; fi
+
       - name: Terraform Apply
         working-directory: ./terraform
         run: |
@@ -149,15 +172,28 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Force new deployment on ECS
+      - name: Force new deployment on ECS (Server)
         run: |
           aws ecs update-service \
             --cluster ${{ env.PROJECT_NAME }}-cluster \
             --service ${{ env.PROJECT_NAME }}-service \
             --force-new-deployment
 
-      - name: Wait for service stability
+      - name: Force new deployment on ECS (Client)
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.PROJECT_NAME }}-cluster \
+            --service ${{ env.PROJECT_NAME }}-client-service \
+            --force-new-deployment
+
+      - name: Wait for server service stability
         run: |
           aws ecs wait services-stable \
             --cluster ${{ env.PROJECT_NAME }}-cluster \
             --services ${{ env.PROJECT_NAME }}-service
+
+      - name: Wait for client service stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ env.PROJECT_NAME }}-cluster \
+            --services ${{ env.PROJECT_NAME }}-client-service
