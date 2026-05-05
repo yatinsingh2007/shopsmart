@@ -142,12 +142,20 @@ jobs:
             aws elbv2 wait load-balancers-deleted --load-balancer-arns $ALB_ARN
           fi
 
-          # Delete Target Groups
+          # Delete Target Groups with retry
           TG_ARN=$(aws elbv2 describe-target-groups --names ${{ env.PROJECT_NAME }}-tg --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null || echo "")
-          if [ -n "$TG_ARN" ]; then aws elbv2 delete-target-group --target-group-arn $TG_ARN; fi
+          if [ -n "$TG_ARN" ]; then 
+            for i in {1..6}; do
+              aws elbv2 delete-target-group --target-group-arn $TG_ARN 2>/dev/null && break || sleep 10
+            done
+          fi
           
           CLIENT_TG_ARN=$(aws elbv2 describe-target-groups --names ${{ env.PROJECT_NAME }}-client-tg --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null || echo "")
-          if [ -n "$CLIENT_TG_ARN" ]; then aws elbv2 delete-target-group --target-group-arn $CLIENT_TG_ARN; fi
+          if [ -n "$CLIENT_TG_ARN" ]; then 
+            for i in {1..6}; do
+              aws elbv2 delete-target-group --target-group-arn $CLIENT_TG_ARN 2>/dev/null && break || sleep 10
+            done
+          fi
 
       - name: Terraform Apply
         working-directory: ./terraform
